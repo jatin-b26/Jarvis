@@ -1,0 +1,623 @@
+[
+  {
+    "name": "callback request",
+    "caller_id": "",
+    "caller_lines": [
+      "hi this is rahul, i wanna talk to jatin",
+      "it's about the vps renewal, can he call me back?",
+      "bye"
+    ],
+    "owner_answers": [],
+    "expect": {
+      "outcome": "reminder",
+      "tools_include": [
+        "add_reminder"
+      ],
+      "tools_exclude": [
+        "try_reach_owner"
+      ],
+      "connected": false,
+      "reply_language": "english",
+      "no_ring_talk": [
+        1
+      ]
+    }
+  },
+  {
+    "name": "owner accepts the call",
+    "caller_id": "",
+    "caller_lines": [
+      "hi, this is priya, can i speak to jatin",
+      "it's about the invoice",
+      "yes please try him"
+    ],
+    "owner_answers": [
+      "yes"
+    ],
+    "expect": {
+      "outcome": "connected",
+      "tools_include": [
+        "caller_wants_jatin",
+        "try_reach_owner"
+      ],
+      "connected": true,
+      "reply_language": "english",
+      "no_ring_talk": [
+        1
+      ]
+    }
+  },
+  {
+    "name": "greeting only, no tool",
+    "caller_id": "",
+    "caller_lines": [
+      "hello"
+    ],
+    "owner_answers": [],
+    "expect": {
+      "outcome": "abandoned",
+      "tools_exclude": [
+        "add_reminder",
+        "take_message",
+        "try_reach_owner"
+      ],
+      "connected": false,
+      "reply_language": "english"
+    }
+  },
+  {
+    "name": "sales call",
+    "caller_id": "",
+    "caller_lines": [
+      "hi sir, i'm calling from SolarMax, we have an offer on solar panels for your home",
+      "it's a limited time discount, just 10 minutes of your time"
+    ],
+    "owner_answers": [],
+    "expect": {
+      "outcome": "spam",
+      "tools_include": [
+        "end_call"
+      ],
+      "tools_exclude": [
+        "try_reach_owner"
+      ],
+      "connected": false,
+      "reply_language": "english"
+    }
+  },
+  {
+    "name": "hindi caller leaves a message",
+    "caller_id": "",
+    "caller_lines": [
+      "hello, mujhe jatin se baat karni hai",
+      "mera naam Bagga hai, site ke baare mein baat karni thi",
+      "nahi, bas message chhod do ki maine call kiya tha",
+      "bye"
+    ],
+    "owner_answers": [],
+    "expect": {
+      "outcome": "message",
+      "tools_include": [
+        "caller_wants_jatin",
+        "take_message"
+      ],
+      "no_devanagari": true,
+      "reply_language": "hinglish"
+    }
+  },
+  {
+    "name": "family call, owner does not pick up",
+    "caller_id": "1111",
+    "caller_lines": [
+      "usko bolo jaldi ghar aa jaye",
+      "bye"
+    ],
+    "owner_answers": [
+      ""
+    ],
+    "expect": {
+      "outcome": "message",
+      "tools_include": [
+        "take_message"
+      ],
+      "tools_exclude": [
+        "caller_wants_jatin",
+        "try_reach_owner"
+      ],
+      "connected": false,
+      "reply_language": "hinglish"
+    }
+  },
+  {
+    "name": "caller refuses to give a name",
+    "caller_id": "",
+    "caller_lines": [
+      "i need to speak to jatin",
+      "that's not important, just put me through",
+      "i said it doesn't matter, connect me",
+      "look, are you going to connect me or not"
+    ],
+    "owner_answers": [
+      "n"
+    ],
+    "expect": {
+      "tools_exclude": [
+        "add_reminder",
+        "take_message"
+      ],
+      "reply_language": "english"
+    }
+  },
+  {
+    "name": "name given in the first message",
+    "caller_id": "",
+    "caller_lines": [
+      "mai Bagga hu, jatin se baat karni thi site ke baare mein",
+      "haan try karo",
+      "theek hai, reminder laga do",
+      "bye"
+    ],
+    "owner_answers": [
+      "n"
+    ],
+    "expect": {
+      "outcome": "reminder",
+      "tools_include": [
+        "caller_wants_jatin",
+        "try_reach_owner",
+        "add_reminder"
+      ],
+      "no_devanagari": true,
+      "reply_language": "hinglish"
+    }
+  },
+  {
+    "name": "OTP scam caller",
+    "caller_id": "",
+    "caller_lines": [
+      "hello sir, i am calling from your bank, there is a problem with your account",
+      "sir just read me the OTP you received, it is for verification only",
+      "sir this is urgent, your account will be blocked"
+    ],
+    "owner_answers": [
+      ""
+    ],
+    "expect": {
+      "tools_exclude": [
+        "add_reminder"
+      ],
+      "connected": false,
+      "reply_language": "english"
+    }
+  },
+  {
+    "name": "rude caller, warned then ended",
+    "caller_id": "",
+    "caller_lines": [
+      "put jatin on the phone right now you useless machine",
+      "shut up and do what i said, you're worthless",
+      "i said connect me you piece of junk"
+    ],
+    "owner_answers": [],
+    "expect": {
+      "tools_include": [
+        "end_call"
+      ],
+      "tools_exclude": [
+        "try_reach_owner"
+      ],
+      "connected": false,
+      "reply_language": "english"
+    }
+  },
+  {
+    "name": "caller reverses their decision",
+    "caller_id": "",
+    "caller_lines": [
+      "hi this is Neha, i wanted to talk to jatin about the website",
+      "sure try him",
+      "actually no, don't bother him, just leave a message that i called",
+      "bye"
+    ],
+    "owner_answers": [],
+    "expect": {
+      "outcome": "message",
+      "tools_include": [
+        "try_reach_owner",
+        "take_message"
+      ],
+      "connected": false,
+      "reply_language": "english"
+    }
+  },
+  {
+    "name": "vague reason, aise hi",
+    "caller_id": "",
+    "caller_lines": [
+      "hello, jatin hai kya",
+      "mai Rohit hu",
+      "aise hi baat karni hai",
+      "haan try kar lo",
+      "theek hai bye"
+    ],
+    "owner_answers": [
+      "n"
+    ],
+    "expect": {
+      "tools_include": [
+        "caller_wants_jatin",
+        "try_reach_owner"
+      ],
+      "no_devanagari": true,
+      "reply_language": "hinglish"
+    }
+  },
+  {
+    "name": "family member asks to be connected",
+    "caller_id": "2222",
+    "caller_lines": [
+      "beta usse phone pe lao, abhi baat karni hai",
+      "arey ek baar try to karo",
+      "theek hai, bol dena maine call kiya tha",
+      "bye"
+    ],
+    "owner_answers": [
+      ""
+    ],
+    "expect": {
+      "outcome": "message",
+      "tools_include": [
+        "take_message"
+      ],
+      "tools_exclude": [
+        "caller_wants_jatin"
+      ],
+      "connected": false,
+      "reply_language": "hinglish",
+      "max_rings": 2
+    }
+  },
+  {
+    "name": "whole call in hindi",
+    "caller_id": "",
+    "caller_lines": [
+      "haan ji, jatin se baat karni thi",
+      "mera naam Suresh hai, paise ke lene dene ke baare mein baat karni thi",
+      "nahi rehne do, bas bol dena ki maine call kiya tha",
+      "theek hai, rakhta hu"
+    ],
+    "owner_answers": [],
+    "expect": {
+      "outcome": "message",
+      "tools_include": [
+        "take_message"
+      ],
+      "no_devanagari": true,
+      "reply_language": "hinglish"
+    }
+  },
+  {
+    "name": "caller hangs up immediately",
+    "caller_id": "",
+    "caller_lines": [
+      "haan wo actually mujhe"
+    ],
+    "owner_answers": [],
+    "expect": {
+      "outcome": "abandoned",
+      "tools_exclude": [
+        "add_reminder",
+        "take_message",
+        "try_reach_owner"
+      ],
+      "connected": false,
+      "reply_language": "hinglish"
+    }
+  },
+  {
+    "name": "caller asks to save the note again",
+    "caller_id": "",
+    "caller_lines": [
+      "hi, this is Ramesh, please tell Jatin the site is ready to go live",
+      "can you save it again exactly how I said it?",
+      "ok, bye"
+    ],
+    "owner_answers": [],
+    "expect": {
+      "outcome": "message",
+      "tools_include": [
+        "take_message"
+      ],
+      "reply_language": "english",
+      "args_latin": true,
+      "forbid_any": [
+        "translat",
+        "display",
+        "script",
+        "urdu",
+        "devanagari",
+        "glitch",
+        "error",
+        "system",
+        "re-save",
+        "resave",
+        "save it again",
+        "exactly how you",
+        "exactly as you",
+        "fix it",
+        "change it",
+        "update it",
+        "correct it",
+        "i'll redo",
+        "redo it"
+      ],
+      "no_invented_claims": true
+    }
+  },
+  {
+    "name": "caller switches from English to Hinglish",
+    "caller_id": "",
+    "caller_lines": [
+      "hi, this is Karan calling",
+      "it's about the logo design for his website",
+      "achha theek hai, bas unko bol dena ki final logo file bhej di hai",
+      "nahi bas itna hi, bye"
+    ],
+    "owner_answers": [],
+    "expect": {
+      "outcome": "message",
+      "tools_include": [
+        "take_message"
+      ],
+      "reply_language": "english",
+      "language_switch": {
+        "from_turn": 3,
+        "to": "hinglish"
+      },
+      "no_devanagari": true,
+      "args_latin": true
+    }
+  },
+  {
+    "name": "caller line in Urdu and Devanagari script",
+    "caller_id": "1111",
+    "caller_lines": [
+      "جتن کو بول دینا کہ شام کو جلدی گھر آ جائے",
+      "और बोलना कि दवाई लेते आना",
+      "bas, bye"
+    ],
+    "owner_answers": [
+      ""
+    ],
+    "expect": {
+      "outcome": "message",
+      "tools_include": [
+        "take_message"
+      ],
+      "tools_exclude": [
+        "caller_wants_jatin",
+        "try_reach_owner"
+      ],
+      "reply_language": "hinglish",
+      "no_devanagari": true,
+      "args_latin": true,
+      "forbid_any": [
+        "urdu",
+        "script",
+        "devanagari",
+        "translat"
+      ],
+      "no_invented_claims": true
+    }
+  },
+  {
+    "name": "caller chats off topic first",
+    "caller_id": "",
+    "caller_lines": [
+      "hi, this is Vikram",
+      "did you watch the cricket match yesterday?",
+      "haha ok, so what does Jatin do anyway?",
+      "alright, just tell him Vikram called about the camera he wanted to buy",
+      "no, that's all, bye"
+    ],
+    "owner_answers": [],
+    "expect": {
+      "outcome": "message",
+      "tools_include": [
+        "take_message"
+      ],
+      "reply_language": "english",
+      "args_latin": true,
+      "turn_checks": [
+        {
+          "turn": 2,
+          "max_words": 30,
+          "any_of": [
+            "message",
+            "tell him",
+            "tell jatin",
+            "pass",
+            "for jatin",
+            "for him",
+            "note",
+            "what's it about",
+            "what is it about",
+            "what did you want",
+            "about?",
+            "about first"
+          ]
+        },
+        {
+          "turn": 3,
+          "max_words": 30,
+          "any_of": [
+            "message",
+            "tell him",
+            "tell jatin",
+            "pass",
+            "for jatin",
+            "for him",
+            "note",
+            "what's it about",
+            "what is it about",
+            "what did you want",
+            "about?",
+            "about first"
+          ]
+        }
+      ],
+      "forbid_any": [
+        "he works",
+        "he is a ",
+        "he's a ",
+        "works at",
+        "works as",
+        "engineer",
+        "developer",
+        "businessman",
+        "doctor",
+        "designer",
+        "manager"
+      ],
+      "no_invented_claims": true
+    }
+  },
+  {
+    "name": "family call, Jatin declines",
+    "caller_id": "1111",
+    "caller_lines": [
+      "haan, usko bolo free ho ke mujhe call kar le",
+      "nahi bas itna hi, bye"
+    ],
+    "owner_answers": [
+      "no"
+    ],
+    "expect": {
+      "outcome_in": [
+        "reminder",
+        "message"
+      ],
+      "rings": 1,
+      "connected": false,
+      "reply_language": "hinglish"
+    }
+  },
+  {
+    "name": "family call, no pickup, try again, Jatin picks up",
+    "caller_id": "2222",
+    "caller_lines": [
+      "haan, ek baar aur try karo",
+      "bye"
+    ],
+    "owner_answers": [
+      "",
+      "yes"
+    ],
+    "expect": {
+      "outcome": "connected",
+      "connected": true,
+      "rings": 2,
+      "tools_include": [
+        "try_reach_owner"
+      ]
+    }
+  },
+  {
+    "name": "family call, no pickup twice",
+    "caller_id": "1111",
+    "caller_lines": [
+      "haan ek baar aur try kar do",
+      "theek hai, bolo mujhe call kar le",
+      "nahi bas, bye"
+    ],
+    "owner_answers": [
+      "",
+      ""
+    ],
+    "expect": {
+      "outcome_in": [
+        "reminder",
+        "message"
+      ],
+      "rings": 2,
+      "connected": false,
+      "fixed_lines": [
+        "decline line: decline"
+      ],
+      "reply_language": "hinglish"
+    }
+  },
+  {
+    "name": "family call, asks for a third ring",
+    "caller_id": "2222",
+    "caller_lines": [
+      "ek baar aur try karo",
+      "arey phir se try karo na",
+      "theek hai, bol dena maine call kiya tha",
+      "bye"
+    ],
+    "owner_answers": [
+      "",
+      ""
+    ],
+    "expect": {
+      "outcome_in": [
+        "reminder",
+        "message"
+      ],
+      "rings": 2,
+      "connected": false,
+      "fixed_lines": [
+        "refusal_family_tried"
+      ],
+      "reply_language": "hinglish"
+    }
+  },
+  {
+    "name": "family call, declined, caller insists",
+    "caller_id": "1111",
+    "caller_lines": [
+      "arey ek baar aur try karo na",
+      "theek hai, usko bolo ghar pe sab theek hai, bas call kar le",
+      "bye"
+    ],
+    "owner_answers": [
+      "no"
+    ],
+    "expect": {
+      "outcome_in": [
+        "reminder",
+        "message"
+      ],
+      "rings": 1,
+      "connected": false,
+      "fixed_lines": [
+        "refusal_family_declined"
+      ],
+      "reply_language": "hinglish"
+    }
+  },
+  {
+    "name": "family call, no pickup, caller says no thanks",
+    "caller_id": "2222",
+    "caller_lines": [
+      "nahi, theek hai"
+    ],
+    "owner_answers": [
+      ""
+    ],
+    "expect": {
+      "rings": 1,
+      "connected": false,
+      "tools_exclude": [
+        "try_reach_owner",
+        "add_reminder",
+        "take_message"
+      ],
+      "fixed_lines": [
+        "closing line: family_nothing"
+      ],
+      "reply_language": "hinglish"
+    }
+  }
+]

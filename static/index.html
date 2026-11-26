@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jarvis Call</title>
+<style>
+  :root { --bg: #f6f6f4; --card: #fff; --text: #1d1d1b; --muted: #6b6b66; --line: #ddddd8;
+          --jarvis: #eef2ff; --caller: #e9f7ef; --accent: #3b5bdb; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --card: #1f1f1e; --text: #ececea; --muted: #9a9a95; --line: #333331;
+            --jarvis: #23284a; --caller: #1e3527; --accent: #7c95ff; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 24px 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
+  .row { display: flex; gap: 8px; }
+  input { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
+          background: var(--card); color: var(--text); font: inherit; }
+  button { padding: 10px 16px; border: 0; border-radius: 8px; background: var(--accent); color: #fff;
+           font: inherit; cursor: pointer; }
+  button.secondary { background: transparent; color: var(--text); border: 1px solid var(--line); }
+  button:disabled { opacity: .45; cursor: default; }
+  #log { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px;
+         margin: 16px 0; min-height: 280px; display: flex; flex-direction: column; gap: 8px; }
+  .msg { padding: 8px 12px; border-radius: 10px; max-width: 85%; white-space: pre-wrap; }
+  .jarvis { background: var(--jarvis); align-self: flex-start; }
+  .caller { background: var(--caller); align-self: flex-end; }
+  .system { color: var(--muted); font-size: 13px; align-self: center; }
+  #phone { display: none; border: 2px solid var(--accent); border-radius: 12px; padding: 12px; margin: 16px 0;
+           background: var(--card); }
+  #phone h2 { font-size: 15px; margin: 0 0 6px; }
+  #briefing { white-space: pre-wrap; margin: 0 0 10px; }
+  #decline { background: #c92a2a; }
+</style>
+</head>
+<body>
+<!-- Lock screen (JARVIS_ACCESS_CODE): shown before anything else. The code is only ever typed here; it is never
+     put in a URL, and the page never stores it. -->
+<section id="lock" style="display:none">
+  <h1>Jarvis</h1>
+  <form id="lockForm" class="row">
+    <input id="lockCode" type="password" placeholder="Enter access code" aria-label="Access code" autocomplete="off">
+    <button id="lockBtn">Unlock</button>
+  </form>
+  <p id="lockError" class="sub" role="alert"></p>
+  <p id="lockNotice" class="sub" style="display:none"></p>
+</section>
+<main>
+  <h1>Jarvis</h1>
+  <p class="sub">Test call. Leave caller ID empty for an unknown caller, or pick a family number from the list.
+  When Jarvis rings Jatin, his phone appears below the call: you play both sides.</p>
+
+  <div class="row">
+    <input id="callerId" list="familyIds" placeholder="Caller ID (optional)" autocomplete="off">
+    <datalist id="familyIds"></datalist>
+    <span id="callerName" class="sub"></span>
+    <button id="startBtn">Start call</button>
+  </div>
+
+  <div id="log"></div>
+
+  <!-- Jatin's phone: appears only while Jarvis is ringing him (step 5). -->
+  <div id="phone">
+    <h2>📱 Jatin's phone <span id="countdown" class="sub"></span></h2>
+    <p id="briefing"></p>
+    <div class="row">
+      <button id="accept" type="button" style="flex:1">Accept</button>
+      <button id="decline" type="button" style="flex:1">Decline</button>
+    </div>
+  </div>
+
+  <form id="turnForm" class="row">
+    <input id="text" placeholder="Say something as the caller…" autocomplete="off" disabled>
+    <button id="sendBtn" disabled>Send</button>
+    <button id="hangupBtn" type="button" class="secondary" disabled>Hang up</button>
+  </form>
+  <div class="row" style="margin-top:8px">
+    <button id="talkBtn" type="button" disabled style="flex:1">Hold to talk</button>
+  </div>
+  <p class="sub" style="margin-top:8px">Hold Space or the button to talk.</p>
+  <p class="sub" style="margin-top:8px">You can talk over Jarvis at any time: she stops, and only what you heard counts. Your voice is transcribed and then discarded. It is never saved.</p>
+</main>
+
+<script>
+const log = document.getElementById("log");
+const text = document.getElementById("text");
+const sendBtn = document.getElementById("sendBtn");
+const hangupBtn = document.getElementById("hangupBtn");
+const talkBtn = document.getElementById("talkBtn");
+
+function show(kind, words) {
+  const div = document.createElement("div");
+  div.className = "msg " + kind;
+  div.textContent = words;
+  log.appendChild(div);
+  div.scrollIntoView({ block: "end" });
+  return div;
+}
+
+// Inputs stay open for the whole call, also while Jarvis talks or thinks: talking over her is a barge-in.
+function setInCall(inCall) {
+  text.disabled = sendBtn.disabled = hangupBtn.disabled = talkBtn.disabled = !inCall;
+  if (inCall) text.focus();
+}
+
+async function post(path, body) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {}),
+  });
+  if (response.status === 401) showLock("Your session has ended. Enter the access code again.");
+  return response.json();
+}
+
+// ---------- lock screen (JARVIS_ACCESS_CODE) ----------
+const lockEl = document.getElementById("lock");
+const mainEl = document.querySelector("main");
+function showLock(message) {
+  lockEl.style.display = "";
+  mainEl.style.display = "none";
+  document.getElementById("lockError").textContent = message || "";
+  document.getElementById("lockCode").focus();
+}
+function hideLock() {
+  lockEl.style.display = "none";
+  mainEl.style.display = "";
+}
+async function checkSession() {
+  let status = { locked: false };
+  try { status = await (await fetch("session")).json(); } catch (error) {}
+  if (status.notice) {
+    const notice = document.getElementById("lockNotice");
+    notice.textContent = status.notice;
+    notice.style.display = "";
+  }
+  if (status.locked) showLock(); else { hideLock(); loadCallerIds(); }
+}
+document.getElementById("lockForm").onsubmit = async (event) => {
+  event.preventDefault();
+  const field = document.getElementById("lockCode");
+  const response = await fetch("unlock", { method: "POST", headers: { "Content-Type": "application/json" },
+                                           body: JSON.stringify({ code: field.value }) });
+  field.value = "";   // never kept on the page
+  const data = await response.json().catch(() => ({}));
+  if (response.ok) { hideLock(); loadCallerIds(); }
+  else document.getElementById("lockError").textContent = data.error || "Couldn't unlock.";
+};
+
+// ---------- Jarvis's voice ----------
+// The server streams 24 kHz 16-bit mono PCM from /speech/<id>, one URL per line (sentence). Each line's
+// download starts the moment its "say" event arrives (so ElevenLabs renders line 2 while line 1 plays);
+// lines are SCHEDULED strictly in order on the Web Audio clock, back to back, at the playhead.
+let audioCtx = null;
+let playhead = 0;               // audio-clock time when everything scheduled so far has played
+let sources = [];               // every scheduled chunk: stopped at once on a barge-in
+let downloads = [];             // AbortControllers of speech downloads still running
+let chain = Promise.resolve();  // scheduling order
+let queued = 0;                 // lines queued but not fully scheduled yet
+let generation = 0;             // bumped by stopAudio: older lines stop scheduling
+let current = null;             // the reply the caller is hearing: {id, items, pending, cut}
+let releasedAt = null, replyAt = null;   // the page's own clock for one spoken turn (sent to /client_timing)
+
+function ctx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === "suspended") audioCtx.resume();
+  return audioCtx;
+}
+
+function newReply() {
+  const id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2);
+  return { id, items: [], pending: true, cut: false, bubble: null };
+}
+
+// Queue one line. item (or null for the hold line) records when its audio starts and ends, so a barge-in
+// can tell the server how many lines the caller heard. Returns what the speech response said (outage etc.).
+function queueLine(url, item) {
+  const gen = generation;
+  const controller = new AbortController();
+  downloads.push(controller);
+  queued += 1;
+  const response = fetch(url, { signal: controller.signal });   // speech starts rendering now
+  const job = chain.then(() => (gen === generation ? schedule(response, item, gen) : {}))
+                   .catch(() => ({ failed: gen === generation }))
+                   .finally(() => { if (gen === generation) queued -= 1; });
+  chain = job.then(() => {}, () => {});
+  return job;
+}
+
+async function schedule(responsePromise, item, gen) {
+  const response = await responsePromise;
+  const rate = Number(response.headers.get("X-Sample-Rate") || 24000);
+  const info = { ended: response.headers.get("X-Call-Ended") === "1",
+                 reply: decodeURIComponent(response.headers.get("X-Reply") || ""),
+                 outcome: response.headers.get("X-Outcome"), call_id: response.headers.get("X-Call-Id") };
+  if (!response.ok || !response.body) return info;
+  const audio = ctx();
+  const reader = response.body.getReader();
+  let carry = new Uint8Array(0);
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done || gen !== generation) break;
+    const bytes = new Uint8Array(carry.length + value.length);
+    bytes.set(carry); bytes.set(value, carry.length);
+    const whole = bytes.length - (bytes.length % 2);
+    carry = bytes.slice(whole);
+    if (!whole) continue;
+    const view = new DataView(bytes.buffer, 0, whole);
+    const buffer = audio.createBuffer(1, whole / 2, rate);
+    const channel = buffer.getChannelData(0);
+    for (let i = 0; i < whole / 2; i++) channel[i] = view.getInt16(i * 2, true) / 32768;
+    const source = audio.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audio.destination);
+    const at = Math.max(playhead, audio.currentTime + 0.05);
+    if (item && item.startAt === null) item.startAt = at;
+    if (item && releasedAt !== null && replyAt !== null) {   // first sound of a spoken turn's reply
+      const firstSound = performance.now() + (at - audio.currentTime) * 1000;
+      post("client_timing", { to_reply_text: replyAt - releasedAt, to_first_sound: firstSound - releasedAt });
+      releasedAt = null;
+    }
+    source.start(at);
+    sources.push(source);
+    playhead = at + buffer.duration;
+    if (item) item.endAt = playhead;
+  }
+  if (item && gen === generation) item.complete = true;
+  return info;
+}
+
+// Resolves once every queued line has played (or was stopped).
+async function audioDone() {
+  await chain;
+  const left = audioCtx ? playhead - audioCtx.currentTime : 0;
+  if (left > 0) await new Promise((done) => setTimeout(done, left * 1000));
+}
+
+function speaking() {
+  return queued > 0 || (audioCtx !== null && audioCtx.currentTime < playhead - 0.02);
+}
+
+function stopAudio() {
+  generation += 1;
+  clearTimeout(fillerTimer);
+  for (const source of sources) { try { source.stop(); } catch (error) {} }
+  sources = [];
+  downloads.forEach((controller) => controller.abort());
+  downloads = [];
+  chain = Promise.resolve();
+  queued = 0;
+  playhead = audioCtx ? audioCtx.currentTime : 0;
+}
+
+// A line counts as heard once at least half of its audio has played ("to the nearest sentence").
+function heardCount(reply) {
+  const now = audioCtx ? audioCtx.currentTime : 0;
+  let n = 0;
+  for (const item of reply.items) {
+    if (!item.complete || item.startAt === null || now < (item.startAt + item.endAt) / 2) break;
+    n += 1;
+  }
+  return n;
+}
+
+// The caller talks (or types) while Jarvis is still speaking or thinking: stop her at once, and tell the
+// server how much of the reply was heard. It cancels the rest and cuts the history to match.
+function bargeIn() {
+  const reply = current;
+  if (!reply || reply.cut || !(reply.pending || speaking())) return;
+  const heard = heardCount(reply);
+  stopAudio();
+  reply.cut = true;
+  if (reply.bubble) {
+    reply.bubble.textContent = reply.items.slice(0, heard).map((item) => item.text).join(" ") + " …";
+  }
+  show("system", heard < reply.items.length || reply.pending ? "(you cut in)" : "(you cut in at the end)");
+  post("barge_in", { reply_id: reply.id, heard }).catch(() => {});
+}
+
+// ---------- Jatin's phone: while a request is pending, ask the server every 500 ms if it's ringing ----------
+const phoneBox = document.getElementById("phone");
+let shownRing = 0;      // the last ring we displayed, so the same ring isn't shown twice
+let countdownTimer = null;
+
+async function checkPhone() {
+  let ring;
+  try { ring = await (await fetch("ring")).json(); } catch (error) { return; }
+  if (!ring.ringing) { hidePhone(); return; }
+  if (ring.ring_id === shownRing) return;
+  shownRing = ring.ring_id;
+  document.getElementById("briefing").textContent = ring.briefing.replaceAll("[Jatin's phone] ", "").replace(/\n\s+/g, "\n");
+  phoneBox.style.display = "block";
+  show("system", "Ringing Jatin…");
+  if (ring.hold_audio_url) queueLine(ring.hold_audio_url, null);   // what the caller hears while it rings
+  let left = ring.seconds;
+  const countdown = document.getElementById("countdown");
+  countdown.textContent = `(${left}s)`;
+  clearInterval(countdownTimer);
+  countdownTimer = setInterval(() => { left -= 1; countdown.textContent = `(${Math.max(left, 0)}s)`; }, 1000);
+}
+
+function hidePhone() {
+  phoneBox.style.display = "none";
+  clearInterval(countdownTimer);
+}
+
+async function answerPhone(choice) {
+  hidePhone();
+  const data = await post("answer", { answer: choice });
+  if (data.error) show("system", data.error);
+}
+document.getElementById("accept").onclick = () => answerPhone("accept");
+document.getElementById("decline").onclick = () => answerPhone("decline");
+
+// Wrap a request that might ring Jatin (start, turn, spoken turn): watch the phone until it returns.
+async function withPhone(request) {
+  const watcher = setInterval(checkPhone, 500);
+  try { return await request; } finally { clearInterval(watcher); hidePhone(); }
+}
+
+let callOver = false;
+function handleEnd(data) {
+  if (data.ended && !callOver) {
+    callOver = true;
+    closeMic();
+    setInCall(false);
+    show("system", `Call #${data.call_id} ended (${data.outcome}). Replay: python show.py ${data.call_id}`);
+  }
+}
+
+// One line for the caller: show it, queue its audio. A speech response can also end the call (voice outage).
+function sayLine(reply, words, url) {
+  if (reply.cut) return;   // sent before the server saw the barge-in: never played
+  if (!reply.bubble) reply.bubble = show("jarvis", words);
+  else reply.bubble.textContent += " " + words;
+  const item = { text: words, startAt: null, endAt: null, complete: false };
+  reply.items.push(item);
+  if (!url) return;
+  queueLine(url, item).then((info) => {
+    if (info.failed) show("system", "(audio unavailable, text only)");
+    if (info.ended) {
+      if (info.reply) show("jarvis", info.reply);
+      handleEnd({ ended: true, call_id: info.call_id, outcome: info.outcome });
+    }
+  });
+}
+
+// Caller IDs: family names come from the server (FAMILY_NAMES in .env, read at request time), never from this file,
+// so they stay out of the public repo. Unmapped numbers show as they are.
+let familyLabels = {};
+function callerLabel(id) { return familyLabels[id] || id; }
+function showCallerName() {
+  const id = document.getElementById("callerId").value.trim();
+  document.getElementById("callerName").textContent = familyLabels[id] && familyLabels[id] !== id ? familyLabels[id] : "";
+}
+function loadCallerIds() { fetch("caller_ids").then((r) => r.json()).then((data) => {
+  const list = document.getElementById("familyIds");
+  list.innerHTML = "";
+  familyLabels = {};
+  for (const { id, label } of data.family || []) {
+    familyLabels[id] = label;
+    const option = document.createElement("option");
+    option.value = id;
+    option.label = label;
+    list.appendChild(option);
+  }
+  showCallerName();
+}).catch(() => {}); }
+document.getElementById("callerId").addEventListener("input", showCallerName);
+
+document.getElementById("startBtn").onclick = async () => {
+  ctx();   // browsers allow audio only after a click: create the audio clock on this one
+  openMic().catch((error) => show("system", "Microphone not available (" + error.message + "). Typing still works."));
+  stopAudio();
+  log.innerHTML = "";
+  callOver = false;
+  const reply = current = newReply();
+  const callerId = document.getElementById("callerId").value.trim();
+  if (callerId) show("system", "Call from " + callerLabel(callerId));
+  const data = await withPhone(post("start", { caller_id: callerId, reply_id: reply.id }));
+  reply.pending = false;
+  if (data.error) { show("system", data.error); return; }   // e.g. "Demo limit reached for today."
+  if (data.filler_after_ms) FILLER_AFTER_MS = data.filler_after_ms;
+  if (data.warning) show("system", "⚠ " + data.warning);
+  if (data.reply) sayLine(reply, data.reply, data.audio_url);
+  if (data.ended) handleEnd(data); else setInCall(true);
+};
+
+// Filler for slow turns: if no line of the reply has arrived FILLER_AFTER_MS after the caller let go (or pressed Send),
+// play one short cached filler (6 per language, picked by the server: random, never the same twice running, never on two turns
+// in a row, skipped about 1 time in 3; a skip returns empty audio). The wait is a setting (JARVIS_FILLER_AFTER_S, default 2.0 s): 7.2 s = the 75th percentile of
+// estimated time to first sound in eval #1372-1425 (speech-to-text 0.41 s + first sentence + voice 0.26 s). It's queued like any line, so if the reply arrives
+// while it plays, the filler finishes first and the reply follows. Fast turns never hear it.
+let FILLER_AFTER_MS = 2000;   // set from the server at call start (JARVIS_FILLER_AFTER_S in .env)
+let fillerTimer = null;
+function armFiller(reply, since) {
+  clearTimeout(fillerTimer);
+  fillerTimer = setTimeout(() => {
+    if (reply === current && reply.pending && !reply.cut && reply.items.length === 0 && !reply.fillerPlayed && !callOver) {
+      reply.fillerPlayed = true;
+      queueLine("filler", null);
+    }
+  }, Math.max(0, FILLER_AFTER_MS - (performance.now() - since)));
+}
+
+// A caller turn, streamed: events arrive one per line (NDJSON) as the server produces them.
+async function sendTurn(path, init, placeholderText) {
+  bargeIn();                              // they spoke or typed over Jarvis
+  const reply = current = newReply();
+  armFiller(reply, path === "turn_audio" && releasedAt !== null ? releasedAt : performance.now());
+  if (init.body instanceof FormData) init.body.append("reply_id", reply.id);
+  else init.body = JSON.stringify({ ...JSON.parse(init.body), reply_id: reply.id });
+  let placeholder = show("system", placeholderText);
+  replyAt = null;
+  const run = async () => {
+    const response = await fetch(path + "?stream=1", init);
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({ error: "Request failed." }));
+      if (response.status === 401) showLock("Your session has ended. Enter the access code again.");
+      placeholder.remove();
+      show("system", data.error);
+      return;
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let pending = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      pending += decoder.decode(value, { stream: true });
+      let newline;
+      while ((newline = pending.indexOf("\n")) >= 0) {
+        const line = pending.slice(0, newline);
+        pending = pending.slice(newline + 1);
+        if (!line.trim()) continue;
+        const event = JSON.parse(line);
+        if (event.type === "heard") {
+          placeholder.remove();
+          reply.callerBubble = show("caller", "🎤 " + event.text);
+          placeholder = show("system", "Jarvis is thinking…");
+        } else if (event.type === "say") {
+          placeholder.remove();
+          if (replyAt === null) replyAt = performance.now();
+          sayLine(reply, event.text, event.audio_url);
+        } else if (event.type === "done") {
+          placeholder.remove();
+          if (event.heard === null && event.reply && !reply.bubble) sayLine(reply, event.reply, null);
+          reply.pending = false;
+          if (event.limit) show("system", event.message || "Demo limit reached for today.");
+          if (event.ended) { await audioDone(); handleEnd(event); }
+        } else if (event.type === "error") {
+          placeholder.remove();
+          show("system", event.error);
+        }
+      }
+    }
+    reply.pending = false;
+  };
+  await withPhone(run().catch((error) => { placeholder.remove(); show("system", "Request failed: " + error.message); }));
+}
+
+document.getElementById("turnForm").onsubmit = async (event) => {
+  event.preventDefault();
+  const words = text.value.trim();
+  if (!words) return;
+  text.value = "";
+  show("caller", words);
+  await sendTurn("turn", { method: "POST", headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ text: words }) }, "Jarvis is thinking…");
+};
+
+hangupBtn.onclick = async () => { stopAudio(); closeMic(); handleEnd(await post("hangup")); };
+
+// ---------- hold to talk: record while the button is held, send the clip on release ----------
+let recorder = null;
+// The mic opens once, when the call starts, and stays open until it ends (live call, 2026-11-25): opening it
+// on every press took 0.1-0.5 s, and a first word said in that time was lost. Recording now starts on press.
+let micStream = null, recordStart = 0, recordEnd = 0;
+
+async function openMic() {
+  if (!micStream) micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  return micStream;
+}
+
+function closeMic() {
+  if (micStream) micStream.getTracks().forEach((track) => track.stop());
+  micStream = null;
+}
+let chunks = [];
+let held = false;  // is the button still held down?
+// Very short presses (under 0.3 s) are ignored (Jatin, 2026-11-26): the clip is dropped silently, nothing is sent,
+// and no "didn't catch that". The barge-in waits for the same 0.3 s, so an accidental tap never cuts Jarvis off
+// (recording still starts at once, so a real first word isn't lost).
+const MIN_PRESS_MS = 300;
+let bargeTimer = null, discardClip = false;
+
+async function startTalking(event) {
+  held = true;
+  // Pressed again inside the 0.4 s tail: carry on with the same recording (live call #912 lost a press here).
+  if (tailTimer !== null) {
+    clearTimeout(tailTimer);
+    tailTimer = null;
+    releasedAt = null;
+    talkBtn.textContent = "Listening… release to send";
+    return;
+  }
+  if (talkBtn.disabled || recorder) return;
+  // Keep getting this press's release even if the pointer slides off the button: only lifting ends it.
+  if (event && event.pointerId !== undefined) { try { talkBtn.setPointerCapture(event.pointerId); } catch (e) {} }
+  clearTimeout(bargeTimer);
+  bargeTimer = setTimeout(() => { bargeTimer = null; bargeIn(); }, MIN_PRESS_MS);   // stops Jarvis once it's a real press
+  discardClip = false;
+  try {
+    recorder = new MediaRecorder(micStream || await openMic());   // instant once the mic is open
+  } catch (error) {
+    show("system", "Microphone not available: " + error.message);
+    return;
+  }
+  chunks = [];
+  recorder.ondataavailable = (event) => chunks.push(event.data);
+  recorder.onstop = sendClip;
+  recorder.start();
+  recordStart = performance.now();
+  talkBtn.textContent = "Listening… release to send";
+  if (!held) stopTalking();  // released while the browser was asking for mic permission
+}
+
+// Keep recording a little after release: people let go while still saying the last word (live call,
+// 2026-11-25). The caller's wait is still timed from the release.
+const TAIL_MS = 400;
+let tailTimer = null;
+
+function stopTalking() {
+  held = false;
+  if (!recorder || recorder.state !== "recording" || tailTimer !== null) return;
+  if (performance.now() - recordStart < MIN_PRESS_MS) {   // a tap: drop it, no tail, no barge-in, nothing sent
+    clearTimeout(bargeTimer);
+    bargeTimer = null;
+    discardClip = true;
+    recorder.stop();
+    talkBtn.textContent = "Hold to talk";
+    return;
+  }
+  releasedAt = performance.now();
+  talkBtn.textContent = "Sending…";
+  const finishing = recorder;
+  tailTimer = setTimeout(() => {
+    tailTimer = null;
+    recordEnd = performance.now();
+    finishing.stop();   // the mic itself stays open until the call ends
+    talkBtn.textContent = "Hold to talk";
+  }, TAIL_MS);
+}
+
+async function sendClip() {
+  const clip = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+  recorder = null;
+  if (discardClip) { discardClip = false; chunks = []; return; }   // a short press: silently ignored
+  const form = new FormData();
+  form.append("audio", clip, "turn.webm");
+  form.append("seconds", ((recordEnd - recordStart) / 1000).toFixed(2));   // over 30 s goes to Scribe
+  await sendTurn("turn_audio", { method: "POST", body: form }, "Jarvis is listening…");
+}
+
+talkBtn.addEventListener("pointerdown", startTalking);
+talkBtn.addEventListener("pointerup", stopTalking);
+talkBtn.addEventListener("pointercancel", stopTalking);   // the browser took the pointer away (e.g. a scroll)
+// No "pointerleave": sliding off the button no longer ends the recording (#912: a sentence cut off mid-way).
+
+// Hold Space to talk (2026-11-26): the same as holding the button (0.4 s tail, barge-in, short presses ignored).
+// Key auto-repeat is ignored, and nothing happens while typing in a text box (the caller ID or the text field).
+function typingInField(target) {
+  return target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+}
+document.addEventListener("keydown", (event) => {
+  if (event.code !== "Space" || typingInField(event.target) || talkBtn.disabled) return;
+  event.preventDefault();          // no page scroll, no "click" on a focused button
+  if (event.repeat) return;        // auto-repeat while held
+  startTalking();
+});
+document.addEventListener("keyup", (event) => {
+  if (event.code !== "Space" || typingInField(event.target) || talkBtn.disabled) return;
+  event.preventDefault();
+  stopTalking();
+});
+window.addEventListener("blur", () => { if (held) stopTalking(); });   // switched window while holding Space
+checkSession();   // lock screen first, if there is one
+</script>
+</body>
+</html>

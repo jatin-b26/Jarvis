@@ -1,0 +1,33 @@
+# Secrets: API keys live here. Never commit. (.env.example lists the names, with no values.)
+.env
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Data: call logs and transcripts (private)
+*.db
+jarvis.db
+
+# Audio: recordings, samples and the rendered voice cache
+samples/
+tts_cache/
+*.webm
+*.mp3
+*.wav
+*.m4a
+
+# Old copies and backups
+step3_live_backup/
+*backup*/
+agent_before_trim.py
+scratch/
+
+# Working notes: kept locally, not published (they quote real calls and plans)
+HANDOFF.md
+README_draft.md
+WEEK3_PLAN.md
+latency_baseline.md
+try_script.py
+DESIGN_LOG.md

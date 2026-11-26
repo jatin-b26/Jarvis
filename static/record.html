@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STT Recordings</title>
+<style>
+  :root { --bg: #f6f6f4; --card: #fff; --text: #1d1d1b; --muted: #6b6b66; --line: #ddddd8; --accent: #3b5bdb; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --card: #1f1f1e; --text: #ececea; --muted: #9a9a95; --line: #333331; --accent: #7c95ff; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 24px 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; }
+  .item { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 10px 0; }
+  .how { color: var(--muted); font-size: 13px; margin: 2px 0 8px; }
+  button { padding: 8px 14px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font: inherit; cursor: pointer; }
+  button:disabled { opacity: .45; cursor: default; }
+  .done { color: #2b8a3e; font-size: 14px; margin-left: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Speech-to-text recordings</h1>
+  <p class="sub">Records exactly like the call page (same browser, same format: WebM/Opus), but the mic stays open,
+  so no clip loses its first word. Each clip downloads to your Downloads folder as 01.webm … 08.webm. Nothing is
+  sent to the server.</p>
+  <button id="mic">1. Turn on the mic</button>
+  <div id="list"></div>
+</main>
+<script>
+const LINES = [
+  ["Haan ji, main Rohit bol raha hoon, Gurgaon se. Jatin se baat karni thi.", "normal pace, like opening a call"],
+  ["Mera naam Priyanka Malhotra hai, Noida Sector 62 wale office ke baare mein call kiya tha.", "normal pace"],
+  ["Hi, this is Karan from Bangalore, I'm calling about the invoice for the website.", "pure English, normal pace"],
+  ["haan", "one quick word, the way you'd answer 'shall I try him?'"],
+  ["Achha theek hai, bas unko bol dena ki payment kal tak ho jayega.", "relaxed"],
+  ["Can he call me back after six? It's about the Pune site visit.", "pure English"],
+  ["Nahi nahi, rehne do, bas bol dena maine call kiya tha.", "FAST and a bit mumbled, like you're in a hurry"],
+  ["Bhai urgent hai, Lajpat Nagar wali property ka agreement aaj sign karna hai, please try karo.", "a bit urgent"],
+];
+let stream = null;
+const list = document.getElementById("list");
+LINES.forEach(([text, how], i) => {
+  const n = String(i + 1).padStart(2, "0");
+  const div = document.createElement("div");
+  div.className = "item";
+  div.innerHTML = `<strong>${n}.</strong> ${text}<div class="how">${how}</div>`;
+  const button = document.createElement("button");
+  button.textContent = "Hold to record";
+  button.disabled = true;
+  const done = document.createElement("span");
+  done.className = "done";
+  div.append(button, done);
+  list.appendChild(div);
+  let recorder = null, chunks = [];
+  button.addEventListener("pointerdown", () => {
+    if (!stream || recorder) return;
+    chunks = [];
+    recorder = new MediaRecorder(stream);
+    recorder.ondataavailable = (e) => chunks.push(e.data);
+    recorder.onstop = () => {
+      const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${n}.webm`;
+      a.click();
+      done.textContent = `saved ${n}.webm (${(blob.size / 1024).toFixed(0)} KB)`;
+      recorder = null;
+      button.textContent = "Record again";
+    };
+    recorder.start();
+    button.textContent = "Recording… release to stop";
+  });
+  const stop = () => {
+    const r = recorder;
+    if (r && r.state === "recording" && !r.stopping) {
+      r.stopping = true;
+      setTimeout(() => r.stop(), 400);  // same 0.4 s tail as the call page
+    }
+  };
+  button.addEventListener("pointerup", stop);
+  button.addEventListener("pointerleave", stop);
+});
+document.getElementById("mic").onclick = async () => {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    document.querySelectorAll(".item button").forEach((b) => (b.disabled = false));
+    document.getElementById("mic").textContent = "Mic on";
+  } catch (error) {
+    alert("Microphone not available: " + error.message);
+  }
+};
+</script>
+</body>
+</html>
